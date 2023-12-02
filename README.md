@@ -1,0 +1,2 @@
+# Moving_Heat_for_APDL
+用来在workbench模拟不同的移动热源模型
