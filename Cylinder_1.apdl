@@ -1,0 +1,64 @@
+!   Commands inserted into this file will be executed just prior to the ANSYS SOLVE command.
+!   These commands may supersede command settings set by Workbench.
+
+!   Active UNIT system in Workbench when this object was created:  Metric (m, kg, N, s, V, A)
+!   NOTE:  Any data that requires units (such as mass) is assumed to be in the consistent solver unit system.
+!                See Solving Units in the help system for more information.
+
+! 来自https://www.bilibili.com/video/BV1H54y1W75a ， https://www.bilibili.com/video/BV1PP4y1a7J4
+! 热对流要1500s之后才能观察到效果(即最高温度向板中心移动)，所以要算很久
+
+CSYS,0                ! 设定坐标系为全局坐标系（ID为0）
+CMSEL,ALL           ! 选取所有单元
+
+! 获取模型中的单元编号的最大和最小值
+*GET,EMAX,ELEM,,NUM,MAX
+*GET,EMIN,ELEM,,NUM,MIN
+ALLSEL                  ! 重新选择所有内容，确保模型中的所有实体都被选择
+
+! 定义圆柱热源的公式中的参数值
+Q1=8000             ! 初始热源强度，热源量级和数值大小需要仔细计算
+r1=0.008             ! 热源尺寸
+PI=3.14159          ! π值
+Yi=-0.012            ! Y 方向的热源深度(圆柱高度)；就是视频中的c值
+VEL=0.037           ! 热源移动的速度
+
+time_weld=30       ! 焊接总时间+1s冷却缓冲；会覆盖设置中的时间，需要通过另一个代码Cooling补充冷却时间
+time_inc=0.1        ! 时间步长
+time_steps=time_weld/time_inc            ! 总的时间步数
+
+NROPT, FULL          ! 使用完全积分的Newton-Raphson方程求解
+
+! 在每个时间步中循环，模拟焊接过程
+*DO,i,1,time_steps,1
+WTIME=(i*time_inc)      ! 计算当前时间
+TIME,WTIME              ! 设置当前时间
+HCENTER=VEL*WTIME       ! 计算热源的中心位置，后边似乎没用到？
+
+! 在内部循环中，遍历所有的单元
+*DO,jj,EMIN,EMAX,1
+! 获取全局笛卡尔坐标系中第j个元素的质心xyz坐标，质心是从元素上选定的节点确定的。
+X=CENTRX(jj)
+Y=CENTRY(jj)
+Z=CENTRZ(jj)
+CSI=Z-VEL*WTIME           ! 注意坐标系的定义
+r0=sqrt(X**2+CSI**2)
+
+! 循环圆柱热源分布载荷，如果X、Y方向在半径和深度范围内，则计算热源强度；否则为0
+*IF,r0,GT,r1,THEN        
+Q=0
+*ELSEIF,Y,LT,Yi,THEN
+Q=0
+*ELSE
+Q=Q1/((PI*r1**2)*ABS(Yi))
+*ENDIF
+
+BFE,jj,HGEN,,Q             ! 在单元上应用圆柱热源
+*ENDDO                     ! 结束内部循环，即对所有单元的遍历
+SOLVE                      ! 在每个时间步上解算热传导方程
+*ENDDO                     ! 结束外部循环，即对时间步的遍历。
+
+CMSEL,ALL                  ! 选择所有的单元
+
+BFEDELE,ALL,ALL            ! 删除所有单元上的热源
+ALLSEL                     ! 重新选择所有内容。

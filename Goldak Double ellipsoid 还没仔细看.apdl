@@ -1,0 +1,79 @@
+!   Commands inserted into this file will be executed just prior to the ANSYS SOLVE command.
+!   These commands may supersede command settings set by Workbench.
+
+!   Active UNIT system in Workbench when this object was created:  Metric (m, kg, N, s, V, A)
+!   NOTE:  Any data that requires units (such as mass) is assumed to be in the consistent solver unit system.
+!                See Solving Units in the help system for more information.
+
+
+! 来自https://forum.ansys.com/forums/topic/goldak-double-ellipsoid-heat-source-in-apdl/
+! 热对流不起不作用？需要补热对流的定义！
+
+! 选择所有的单元
+CMSEL,ALL
+! 获取模型中单元的最大和最小编号。
+*GET,EMAX,ELEM,,NUM,MAX
+*GET,EMIN,ELEM,,NUM,MIN
+
+! 重新选择所有内容，确保模型中的所有实体都被选择。
+ALLSEL
+
+! 定义总的模拟时间和时间步长
+TIME_WELD=80
+DT=1
+
+! 热源的椭球参数
+A=0.003
+B=0.003
+C1=0.004
+C2=0.016
+TAU=0
+FF=0.6
+FR=1.4
+! 定义初始热源强度、速度
+Q=1000
+VEL=0.00173
+! 总的时间步数
+NPT=TIME_WELD/DT
+
+! 完全积分的Newton-Raphson方程
+NROPT, FULL
+
+! 模拟总时间 TIME_WELD 内的每一个时间步
+*DO,i,1,NPT,1
+
+WTIME=(i)               ! 计算当前时间，为什么不是WTIME=(i*DT) 
+TIME,WTIME              ! 设置当前时间
+HCENTER=VEL*WTIME       ! 计算热源的中心位置。后续没用到？
+
+! 在内部循环中，遍历所有的单元
+*DO,jj,EMIN,EMAX,1
+
+! 获取当前单元的中心坐标
+X=CENTRX(jj)
+Y=CENTRY(jj)
+Z=CENTRZ(jj)
+CSI=Z+VEL*(TAU-WTIME)      ! 注意坐标系的定义
+
+*IF,Z,GT,HCENTER,THEN
+C=C1
+F=FF
+*ELSE
+C=C2
+F=FR
+*ENDIF
+
+PART1=(6*(3**0.5)*F*Q)/(A*B*C*3.14*(3.14**0.5))
+PART2=(exp(-3*(X/A)**2))*(exp(-3*(Y/B)**2))*(exp(-3*((CSI/C)**2)))
+
+QF=PART1*PART2          ! 计算最终的热源强度
+BFE,jj,HGEN,,QF
+*ENDDO                  ! 结束内部循环，即对所有单元的遍历
+
+SOLVE                   ! 在每个时间步上求解热传导问题
+*ENDDO                  ! 结束外部循环，即对时间步的遍历。
+
+CMSEL,ALL               ! 选择所有的单元
+BFEDELE,ALL,ALL         ! 删除所有单元上的热源
+ALLSEL                  ! 重新选择所有内容。
+

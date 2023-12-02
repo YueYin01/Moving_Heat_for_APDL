@@ -1,0 +1,54 @@
+!   Commands inserted into this file will be executed just prior to the ANSYS SOLVE command.
+!   These commands may supersede command settings set by Workbench.
+
+!   Active UNIT system in Workbench when this object was created:  Metric (m, kg, N, s, V, A)
+!   NOTE:  Any data that requires units (such as mass) is assumed to be in the consistent solver unit system.
+!                See Solving Units in the help system for more information.
+
+! 确认冷却阶段热对流还是起作用的，但是不确定焊接阶段是否起作用？
+
+
+CSYS,0              ! 设定坐标系为全局坐标系（ID为0）
+CMSEL,ALL           ! 选取所有单元
+
+! 获取模型中的单元编号的最大和最小值
+*GET,EMAX,ELEM,,NUM,MAX
+*GET,EMIN,ELEM,,NUM,MIN
+ALLSEL              ! 取消所有的选择
+
+! 使用完全积分的Newton-Raphson方程求解
+NPOPT,FULL
+
+! 测试一下冷却时间
+TAU_1=21              ! 初始时间（20s焊接+1s冷却）
+TAU_2=19                ! 将后续冷却分为多个阶段，在保证温度过渡平缓的同时减少内存占用
+TAU_3=160
+TAU_4=1800           ! 总时间为20s焊接+1980s冷却，总时长需要和“分析设置”中保持一致
+
+*DO,j,1,TAU_2,1
+WTIME_NEW=j
+DELTIM,1,1,1,OFF                   ! 修改时间子步长为1s，关闭携带时步
+TIME,TAU_1+WTIME_NEW      ! 记得加上之前的时间
+SOLVE
+*ENDDO
+
+*DO,j,40,TAU_3,40                   ! 载荷步的步长需要能够被TAU定义的时间整除
+WTIME_NEW=j
+DELTIM,5,5,5,OFF                    ! 修改时间子步长为5s，关闭携带时步
+TIME,TAU_1+TAU_2+WTIME_NEW        ! 记得加上之前的时间
+SOLVE
+*ENDDO
+
+*DO,j,300,TAU_4,300
+WTIME_NEW=j   
+DELTIM,25,25,50,OFF             ! 修改时间子步长为25-50s，关闭携带时步
+TIME,TAU_1+TAU_2+TAU_3+WTIME_NEW                ! 记得加上之前的时间
+SOLVE
+*ENDDO
+
+! 取消所有的选择
+CMSEL,ALL
+
+! 删除所有单元
+BFEDELE,ALL,ALL
+ALLSEL

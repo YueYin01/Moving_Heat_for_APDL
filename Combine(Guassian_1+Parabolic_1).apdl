@@ -1,0 +1,69 @@
+!   Commands inserted into this file will be executed just prior to the ANSYS SOLVE command.
+!   These commands may supersede command settings set by Workbench.
+
+!   Active UNIT system in Workbench when this object was created:  Metric (m, kg, N, s, V, A)
+!   NOTE:  Any data that requires units (such as mass) is assumed to be in the consistent solver unit system.
+!                See Solving Units in the help system for more information.
+
+! 来自https://www.bilibili.com/video/BV1PP4y1a7J4
+! 用来模拟electron beam welding电子束焊接，与高斯+圆锥形状比较像，应该就是把圆锥换成了抛物线
+! 热对流要1500s之后才能观察到效果(即最高温度向板中心移动)，所以要算很久
+
+CSYS,0                ! 设定坐标系为全局坐标系（ID为0）
+CMSEL,ALL             ! 选取所有单元
+
+! 获取模型中的单元编号的最大和最小值
+*GET,EMAX,ELEM,,NUM,MAX
+*GET,EMIN,ELEM,,NUM,MIN
+ALLSEL                ! 取消所有的选择
+
+! 定义高斯抛物线热源的公式中的参数值
+Q1=1E11               ! 初始热源强度
+rEB=0.005             ! 热源尺寸
+rmax=rEB              ! 这个什么意思？
+Yi=-0.012             ! Y 方向上的阈值，用于判断是否计算热源；就是视频中的d值
+VEL=0.037             ! 热源移动的速度
+
+time_weld=20          ! 焊接总时间+1s冷却缓冲；会覆盖设置中的时间，需要通过另一个代码Cooling补充冷却时间
+time_inc=0.1          ! 时间步长
+time_steps=time_weld/time_inc            ! 时间步数
+
+NPOPT,FULL            ! 使用完全积分的Newton-Raphson方程求解
+
+! 在每个时间步中循环，模拟焊接过程
+*DO,i,1,time_steps,1
+WTIME=(i*time_inc)
+TIME,WTIME
+HCENTER=VEL*WTIME           ! 热源中心，后边似乎没用到？
+
+! 全局笛卡尔坐标系中第j个元素的质心xyz坐标，质心是从元素上选定的节点确定的。
+*DO,jj,EMIN,EMAX,1
+X=CENTRX(jj)
+Y=CENTRY(jj)
+Z=CENTRZ(jj)
+CSI=Z-VEL*WTIME             ! 这里是减么？还是加？
+r0=sqrt(X**2+CSI**2)
+
+! 循环高斯抛物线热源分布载荷，如果Y方向在深度范围内，则计算热源强度；否则热源强度为0
+*IF,r0,GT,rEB,THEN
+Q=0
+*ELSEIF,Y,LT,Yi,THEN
+Q=0
+*ELSE
+r0=rmax*sqrt((Y+Yi)/Yi)     ! 公式需要核对？这个公式应该有问题，Yi是负值，应该是减？而且这个sqrt的括号位置也不对啊？
+! r0=rmax*sqrt(Y-Yi)/ABS(Yi)  ! 按照公式的写法，应该是这个才对
+Q=Q1*exp((-3)*(X**2+CSI**2)/(r0)**2)
+*ENDIF
+
+
+BFE,jj,HGEN,,Q              ! 在单元上应用高斯抛物线热源
+*ENDDO
+SOLVE                       ! 解算热传导方程
+*ENDDO
+
+! 取消所有的选择
+CMSEL,ALL
+
+! 删除所有单元
+BFEDELE,ALL,ALL
+ALLSEL
