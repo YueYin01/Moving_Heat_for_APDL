@@ -29,7 +29,7 @@ time_weld=20          ! 焊接总时间+1s冷却缓冲；会覆盖设置中的�
 time_inc=0.1           ! 时间步长
 time_steps=time_weld/time_inc            ! 时间步数
 
-NPOPT,FULL          ! 使用完全积分的Newton-Raphson方程求解
+NROPT,FULL          ! 使用完全积分的Newton-Raphson方程求解
 
 ! 在每个时间步中循环，模拟焊接过程
 *DO,i,1,time_steps,1

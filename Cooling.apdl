@@ -17,7 +17,7 @@ CMSEL,ALL           ! 选取所有单元
 ALLSEL              ! 取消所有的选择
 
 ! 使用完全积分的Newton-Raphson方程求解
-NPOPT,FULL
+NROPT,FULL
 
 ! 测试一下冷却时间
 TAU_1=21              ! 初始时间（20s焊接+1s冷却）
