@@ -1,0 +1,11 @@
+!   Commands inserted into this file will be executed just prior to the ANSYS SOLVE command.
+!   These commands may supersede command settings set by Workbench.
+
+!   Active UNIT system in Workbench when this object was created:  Metric (m, kg, N, s, V, A)
+!   NOTE:  Any data that requires units (such as mass) is assumed to be in the consistent solver unit system.
+!                See Solving Units in the help system for more information.
+
+! 来自
+! 热对流要1500s之后才能观察到效果(即最高温度向板中心移动)，所以要算很久
+
+! 可以研究一下论文里公式写一下
