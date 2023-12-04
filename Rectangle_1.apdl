@@ -17,7 +17,7 @@ CMSEL,ALL           ! 选择所有的单元
 ALLSEL              ! 重新选择所有内容，确保模型中的所有实体都被选择。
 
 ! 定义圆柱热源的公式中的参数值
-Q1=8000             ! 初始热源强度
+Q1=8000             ! 初始热源强度，热源量级和数值大小需要仔细计算；目前峰值温度为1050℃
 a1=0.006            ! 热源尺寸
 b1=0.004
 c1=-0.012           ! 就是其他代码里的Yi，厚度方向的取值
@@ -41,26 +41,24 @@ HCENTER=VEL*WTIME       ! 计算热源的中心位置，后边似乎没用到？
 X=CENTRX(jj)
 Y=CENTRY(jj)
 Z=CENTRZ(jj)
-CSI=Z-VEL*WTIME            ! 注意坐标系的定义，这里是减么？还是加？
-a0=ABS(X)
-b0=ABS(Z-VEL*(TAU+WTIME))
+CSI=Z-VEL*WTIME            ! 注意坐标系的定义，这里是减么？还是加？这个后边没用到啊？
 
 ! 循环圆柱热源分布载荷，如果X、Y方向在宽度和深度范围内，则计算热源强度；否则为0
-*IF,a0,GT,a1/2,THEN        
+*IF,ABS(X),GT,a1/2,THEN        
 Q=0
-*ELSEIF,b0,GT,b1/2,THEN    
+*ELSEIF,ABS(CSI),GT,b1/2,THEN    
 Q=0
 *ELSEIF,Y,LT,c1,THEN    
 Q=0
 *ELSE
-Q=Q1/(a1*b1*ABS(c1))
+Q=Q1/(a1*b1*ABS(c1))       ! 怎么形状有些奇怪啊？
 *ENDIF
 
-BFE,jj,HGEN,,Q         ! 在单元上应用圆柱热源
-*ENDDO                  ! 结束内部循环，即对所有单元的遍历
-SOLVE                     ! 在每个时间步上求解热传导方程
-*ENDDO                  ! 结束外部循环，即对时间步的遍历。
+BFE,jj,HGEN,,Q             ! 在单元上应用圆柱热源
+*ENDDO                     ! 结束内部循环，即对所有单元的遍历
+SOLVE                      ! 在每个时间步上求解热传导方程
+*ENDDO                     ! 结束外部循环，即对时间步的遍历。
 
-CMSEL,ALL               ! 选择所有的单元
-BFEDELE,ALL,ALL         ! 删除所有单元上的热源
+CMSEL,ALL                  ! 选择所有的单元
+BFEDELE,ALL,ALL            ! 删除所有单元上的热源
 ALLSEL                     ! 重新选择所有内容。
