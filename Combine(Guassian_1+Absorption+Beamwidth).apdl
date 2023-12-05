@@ -1,0 +1,72 @@
+!   Commands inserted into this file will be executed just prior to the ANSYS SOLVE command.
+!   These commands may supersede command settings set by Workbench.
+
+!   Active UNIT system in Workbench when this object was created:  Metric (m, kg, N, s, V, A)
+!   NOTE:  Any data that requires units (such as mass) is assumed to be in the consistent solver unit system.
+!                See Solving Units in the help system for more information.
+
+! 来自https://www.youtube.com/watch?v=jC2zdQpG1qE&list=PLzzqBYg7CbNqNlrA1QWayuhW_iEFpzCFH&index=54
+! 具有吸收系数和光束宽度/像散的高斯热源？ 研究了一下，和Combine(Guassian_1+Conical_1+Absorption)基本一样
+! 这个beam width/astigmatism看不太懂什么意思，只是把w换成σx和σy了
+! 热对流要1500s之后才能观察到效果(即最高温度向板中心移动)，所以要算很久
+
+CSYS,0                  ! 设定坐标系为全局坐标系（ID为0）
+CMSEL,ALL               ! 选取所有单元
+
+! 获取模型中的单元编号的最大和最小值
+*GET,EMAX,ELEM,,NUM,MAX
+*GET,EMIN,ELEM,,NUM,MIN
+ALLSEL                  ! 取消所有的选择
+
+! 定义热源公式中的参数值
+Q1=36000                ! 初始热源强度（W），热源量级和数值大小需要仔细计算（过大会直接报错）；目前峰值温度824℃
+a1=0                    ! 这两个值是什么？
+b1=0
+alpha=80                ! absorption光束功率吸收系数（1/m），这个值怎么取？
+R=0.3                   ! 反射率，假设钢的反射率为0.3
+sigma_x=0.00500         ! 光束宽度和散光的标准偏差参数（m），应该就是半径r值，所以就是把圆换成了椭圆？
+sigma_y=0.00225
+PI=3.14159
+Yi=-0.014               ! Y 方向上的阈值（m），用于判断是否计算热源；
+VEL=0.037               ! 热源移动的速度（m/s）
+
+time_weld=21            ! 焊接总时间（20s）+1s冷却缓冲；会覆盖设置中的时间，需要通过另一个代码Cooling补充冷却时间
+time_inc=0.1            ! 时间步长
+time_steps=time_weld/time_inc            ! 时间步数
+
+NROPT,FULL              ! 使用完全积分的Newton-Raphson方程求解
+
+! 在每个时间步中循环，模拟焊接过程
+*DO,i,1,time_steps,1
+WTIME=(i*time_inc)
+TIME,WTIME
+HCENTER=VEL*WTIME       ! 热源中心
+
+! 全局笛卡尔坐标系中第j个元素的质心xyz坐标，质心是从元素上选定的节点确定的。
+*DO,jj,EMIN,EMAX,1
+X=CENTRX(jj)
+Y=CENTRY(jj)
+Z=CENTRZ(jj)
+CSI=Z-VEL*WTIME        ! 这里是减么？还是加？
+
+! 循环热源分布载荷，如果 Y 大于阈值 Yi，则计算热源强度，否则为0
+*IF,Y,GT,Yi,THEN         ! 这个源代码是不写IF的，不写似乎也可以
+! 视频开头的公式应该有问题，x和y应该是平方？ 在YouTube的S.B.的视频P54中
+! 这里公式最后的应该是alpha*Y还是alpha*ABS(Y)呢？
+Q=(Q1*(1-R)*alpha/(2*PI*sigma_x*sigma_y))*exp((-1)*(((X-a1)**2)/(2*sigma_x**2)+((CSI-b1)**2)/(2*sigma_y**2)+alpha*ABS(Y)))
+*ELSE
+Q=0
+*ENDIF
+
+
+BFE,jj,HGEN,,Q           ! 在单元上应用热源
+*ENDDO
+SOLVE                    ! 解算热传导方程
+*ENDDO
+
+! 取消所有的选择
+CMSEL,ALL
+
+! 删除所有单元
+BFEDELE,ALL,ALL
+ALLSEL
