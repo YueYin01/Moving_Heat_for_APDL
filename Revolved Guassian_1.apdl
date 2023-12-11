@@ -5,8 +5,7 @@
 !   NOTE:  Any data that requires units (such as mass) is assumed to be in the consistent solver unit system.
 !                See Solving Units in the help system for more information.
 
-! 来自https://www.bilibili.com/video/BV1PP4y1a7J4
-! 用来模拟Electron Beam Welding电子束焊接，与高斯+圆锥形状比较像，应该就是把圆锥换成了抛物线
+! 来自《Al-Zn-Mg-Cu铝合金的电子束焊及其接头组织与性能研究（学位论文）》；《面向Cu材料焊接的蓝光半导体激光与光纤激光复合光源研究（学位论文）》；《5A06铝合金激光-MIG复合焊接气孔缺陷形态与影响因素研究（学位论文）》
 ! 热对流要1500s之后才能观察到效果(即最高温度向板中心移动)，所以要算很久
 
 CSYS,0                ! 设定坐标系为全局坐标系（ID为0）
@@ -17,11 +16,12 @@ CMSEL,ALL             ! 选取所有单元
 *GET,EMIN,ELEM,,NUM,MIN
 ALLSEL                ! 取消所有的选择
 
-! 定义高斯抛物线热源的公式中的参数值
-Q1=5.2E10               ! 初始热源强度，热源量级和数值大小需要仔细计算（过大会直接报错）？目前峰值温度为1604℃
-rEB=0.005             ! 热源尺寸
-rmax=rEB              ! 这个什么意思？
-Yi=-0.012             ! Y 方向上的阈值，用于判断是否计算热源；就是视频中的d值
+! 定义旋转高斯体热源的公式中的参数值
+Q1=5000               ! 初始热源强度，热源量级和数值大小需要仔细计算；目前峰值温度为   ℃
+r1=0.005              ! 热源尺寸
+Yi=-0.014             ! Y 方向上的阈值，用于判断是否计算热源，就是公式中的值
+PI=3.14159
+Euler=2.718
 VEL=0.037             ! 热源移动的速度
 
 time_weld=21          ! 焊接总时间+1s冷却缓冲；会覆盖设置中的时间，需要通过另一个代码Cooling补充冷却时间
@@ -34,33 +34,36 @@ NROPT,FULL            ! 使用完全积分的Newton-Raphson方程求解
 *DO,i,1,time_steps,1
 WTIME=(i*time_inc)
 TIME,WTIME
-HCENTER=VEL*WTIME               ! 热源中心，后边似乎没用到？
+HCENTER=VEL*WTIME     ! 热源中心，后边似乎没用到？
 
 ! 全局笛卡尔坐标系中第j个元素的质心xyz坐标，质心是从元素上选定的节点确定的。
 *DO,jj,EMIN,EMAX,1
 X=CENTRX(jj)
 Y=CENTRY(jj)
 Z=CENTRZ(jj)
-CSI=Z-VEL*WTIME                 ! 这里是减么？还是加？
+CSI=Z-VEL*WTIME       ! 这里是减么？还是加？
 r0=sqrt(X**2+CSI**2)
 
-! 循环高斯抛物线热源分布载荷，如果Y方向在深度范围内，则计算热源强度；否则热源强度为0
-*IF,r0,GT,rEB,THEN
+IF,ABS(Y),LE,0.0001,THEN                         ! 人为加的，为了解决后边的LOG计算的问题
+Y=0.0001
+
+! 循环旋转高斯体热源分布载荷，如果Y方向在深度范围内，则计算热源强度；否则热源强度为0
+*IF,Y,LT,Yi,THEN
 Q=0
-*ELSEIF,Y,LT,Yi,THEN
+*ELSEIF,r0,GT,r1,THEN
 Q=0
+*ELSEIF,Y,GE,Yi,AND,r0,LE,r1,THEN
+PART_1=9*Q1/(PI*r1**2*(1-Euler**(-3)))           ! 不同论文里公式不一样，需要校核
+PART_2=exp((-9)*(X**2+CSI**2)/LOG10(Yi/Y))       ! 公式里的LOG10需要校核一下
+Q=PART_1*PART_2
 *ELSE
-! r_fun=rmax*sqrt((Y+Yi)/Yi)       ! 公式需要核对？这个公式应该有问题，Yi是负值，应该是减？而且这个sqrt的括号位置也不对啊？
-! 形状不太对啊？按上面这个r0的公式，形状是💧水滴形的；
-! 按下面这个公式反而是正常的抛物线形状，峰值温度为840℃
-r_fun=rmax*sqrt(Y-Yi)/ABS(Yi)    ! 按照公式的写法，应该是这个才对
-Q=Q1*exp((-3)*(X**2+CSI**2)/(r_fun)**2)
+Q=0
 *ENDIF
 
 
-BFE,jj,HGEN,,Q              ! 在单元上应用高斯抛物线热源
+BFE,jj,HGEN,,Q         ! 在单元上应用热源
 *ENDDO
-SOLVE                       ! 解算热传导方程
+SOLVE                  ! 解算热传导方程
 *ENDDO
 
 ! 取消所有的选择
